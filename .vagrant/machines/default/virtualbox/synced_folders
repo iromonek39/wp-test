@@ -1,0 +1,1 @@
+{"rsync":{"/vagrant":{"type":"rsync","guestpath":"/vagrant","hostpath":"C:/Users/kenta/Documents/src/wp","disabled":false,"__vagrantfile":true,"owner":"vagrant","group":"vagrant"}},"virtualbox":{"/var/www/wordpress":{"create":true,"guestpath":"/var/www/wordpress","hostpath":"C:/Users/kenta/Documents/src/wp/nuxt2","disabled":false,"__vagrantfile":true}}}
