@@ -1,33 +1,48 @@
 <?php
-  // 画像追加（これはもういらないかも）
-  add_action('rest_api_init', 'customize_api_response');
-  function customize_api_response() {
-    register_rest_field(
-      'post',
-      'thumbnail',
-      array(
-        'get_callback'  => function ($post) {
-          $thumbnail_id = get_post_thumbnail_id($post['id']);
+  function my_customize_rest_cors() {
+    remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
+    add_filter( 'rest_pre_serve_request', function( $value ) {
+      header( 'Access-Control-Allow-Origin: *' );
+      header( 'Access-Control-Allow-Methods: GET' );
+      header( 'Access-Control-Allow-Credentials: true' );
+      header( 'Access-Control-Expose-Headers: Link', false );
+      header( 'Access-Control-Allow-Headers: X-Requested-With' );
 
-          if ($thumbnail_id) {
-            // アイキャッチが設定されていたらurl・width・heightを配列で返す
-            $img = wp_get_attachment_image_src($thumbnail_id, 'large');
-
-            return [
-              'url' => $img[0],
-              'width' => $img[1],
-              'height' => $img[2]
-            ];
-          } else {
-            // アイキャッチが設定されていなかったら空の配列を返す
-            return [];
-          }
-        },
-        'update_callback' => null,
-        'schema'          => null,
-      )
-    );
+      return $value;
+    });
   }
+  add_action( 'rest_api_init', 'my_customize_rest_cors', 15 );
+
+  add_theme_support( 'post-thumbnails' );
+  // 画像追加（これはもういらないかも）
+  // add_action('rest_api_init', 'customize_api_response');
+  // function customize_api_response() {
+  //   register_rest_field(
+  //     'post',
+  //     'thumbnail',
+  //     array(
+  //       'get_callback'  => function ($post) {
+  //         $thumbnail_id = get_post_thumbnail_id($post['id']);
+
+  //         if ($thumbnail_id) {
+  //           // アイキャッチが設定されていたらurl・width・heightを配列で返す
+  //           $img = wp_get_attachment_image_src($thumbnail_id, 'large');
+
+  //           return [
+  //             'url' => $img[0],
+  //             'width' => $img[1],
+  //             'height' => $img[2]
+  //           ];
+  //         } else {
+  //           // アイキャッチが設定されていなかったら空の配列を返す
+  //           return [];
+  //         }
+  //       },
+  //       'update_callback' => null,
+  //       'schema'          => null,
+  //     )
+  //   );
+  // }
 
   // 投稿タイプ：postを全件取得＋レスポンスを加工
   function add_rest_endpoint_all_posts_from_blog() {
@@ -36,7 +51,8 @@
       '/post',
       array(
         'methods' => 'GET',
-        'callback' => 'get_all_posts_from_blog'
+        'callback' => 'get_all_posts_from_blog',
+        'permission_callback' => function() { return true; }
       )
     );
   }
@@ -118,7 +134,7 @@
   function add_rest_endpoint_single_posts() {
     register_rest_route(
       'wp/api',
-      '/post/(?P<id>[\d]+)',
+      '/blog/(?P<id>[\d]+)',
       array(
         'methods' => 'GET',
         'callback' => 'get_single_posts',
@@ -139,14 +155,15 @@
     foreach($all_posts as $post) {
       array_push($all_posts_ids, $post->ID);
     }
+
     $args_single = array(
       'posts_per_page' => 1,
       'post_type' => 'post',
       'post_status' => 'publish',
-      'include' => $parameter[id]
+      'include' => $parameter['id']
     );
     $single_post = get_posts($args_single);
-    $single_post_index = !empty($single_post) ? array_search((int) $parameter[id], $all_posts_ids, true) : -2;
+    $single_post_index = !empty($single_post) ? array_search((int) $parameter['id'], $all_posts_ids, true) : -2;
     $prev_post_id = $single_post_index < count($all_posts_ids) - 1 ? $single_post_index + 1 : null;
     $next_post_id = !is_null($single_post_index) && ($single_post_index > 0) ? $single_post_index - 1 : null;
     $targets = array($all_posts[$next_post_id], $single_post[0], $all_posts[$prev_post_id]);
