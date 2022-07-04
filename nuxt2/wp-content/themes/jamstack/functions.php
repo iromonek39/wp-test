@@ -1,4 +1,25 @@
 <?php
+  //カスタム投稿のカテゴリー：カテゴリー選択ボックスで一つだけしか選択できないようにする。
+  add_action( 'admin_print_footer_scripts', 'select_to_radio_tags' );
+  function select_to_radio_tags() {
+      ?>
+      <script type="text/javascript">
+      jQuery( function( $ ) {
+          // 投稿画面
+          $( '#taxonomy-tags input[type=checkbox]' ).each( function() {
+              $( this ).replaceWith( $( this ).clone().attr( 'type', 'radio' ) );
+          } );
+
+          // 一覧画面
+          let event_cat_checklist = $( '.tagschecklist input[type=checkbox]' );
+          event_cat_checklist.click( function() {
+            $( this ).closest( '.tagschecklist' ).find( ' input[type=checkbox]' ).not(this).prop( 'checked', false );
+          } );
+      } );
+      </script>
+      <?php
+  }
+
   function my_customize_rest_cors() {
     remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
     add_filter( 'rest_pre_serve_request', function( $value ) {
@@ -58,9 +79,10 @@
   }
   function get_all_posts_from_blog() {
     $args = array(
-      'posts_per_page' => -1,
+      'posts_per_page' => $_GET['perpage'],
       'post_type' => 'post',
-      'post_status' => 'publish'
+      'post_status' => 'publish',
+      'paged' => $_GET['pagenation']
     );
     $all_posts = get_posts($args);
     $result = array();
@@ -73,7 +95,9 @@
         'modified' => $post->post_modified,
         'title' => $post->post_title,
         'excerpt' => $post->post_excerpt,
-        'content' => $post->post_content
+        'content' => $post->post_content,
+        'category' => get_the_category($post->ID),
+        'tag' => get_the_tags($post->ID)
       );
       array_push($result, $data);
     };
@@ -178,10 +202,100 @@
         'title' => $post->post_title,
         'excerpt' => $post->post_excerpt,
         'content' => $post->post_content,
-        'category' => get_the_terms($post->ID, 'blog_category')[0]->name,
+        'category' => get_the_category($post->ID)
       );
       array_push($result, $data);
     };
     return $result;
   }
   add_action('rest_api_init', 'add_rest_endpoint_single_posts');
+
+  // カテゴリー追加
+  // function api_add_fields() {
+  //   register_rest_field( 'post',
+  //   'cat_info',
+  //   array(
+  //     'get_callback'    => 'register_fields',
+  //     'update_callback' => null,
+  //     'schema'          => null,
+  //     )
+  //   );
+  // }
+  // function register_fields( $post, $name ) {
+  //   return get_the_category($post['id']);
+  // }
+  // var_dump(api_add_fields());
+  // add_action( 'rest_api_init', 'api_add_fields' );
+
+  function add_rest_endpoint_all_news() {
+    register_rest_route(
+      'wp/api',
+      '/news',
+      array(
+        'methods' => 'GET',
+        'callback' => 'get_all_news',
+        'permission_callback' => function() { return true; }
+      )
+    );
+  }
+  function get_all_news() {
+    $my_posts = [];
+    $prefectures = get_terms('prefecture');
+    $prefecture_index = 0;
+    foreach ($prefectures as $prefecture) {
+        ++$prefecture_index;
+        $precture_order = get_term_meta($prefecture->term_id, 'prefecture_order', true);
+        $my_post = [
+            'order' => intval($precture_order)
+        ];
+        $my_post['id'] = $prefecture_index;
+        $my_post['prefecture'] = $prefecture->name;
+        $args = array(
+            'post_type' => 'shop_list',
+            'paged' => get_query_var('page'),
+            'order' => 'ASC',
+            'tax_query' => array(
+                array(
+                    'taxonomy' => 'prefecture',
+                    'field'    => 'slug',
+                    'terms'    => $prefecture->slug,
+                ),
+            ),
+            'posts_per_page' => -1,
+        );
+        $WP_post = new WP_Query($args);
+        $WP_post_json = json_encode($WP_post -> posts);
+        $i = 0;
+        if ($WP_post->have_posts()) {
+            while ($WP_post->have_posts()) {
+                $WP_post->the_post();
+                $post_data = [];
+                $post_id = get_the_ID();
+                $brand = get_the_terms($post_id, 'brand');
+                $item = get_the_terms($post_id, 'item');
+                $prefecture = get_the_terms($post_id, 'prefecture');
+                $post_data['post_id'] = get_the_ID();
+                $post_data['post_title'] = get_the_title();
+                $post_data['shop_name'] = get_field('shop_name');
+                $post_data['shop_adress'] = get_field('shop_adress');
+                $post_data['shop_tel'] = get_field('shop_tel');
+                $post_data['googlemap'] = get_field('googlemap');
+                if ($brand == true) {
+                    $post_data['brand'] = array_column($brand, 'name');
+                } else {
+                    $post_data['brand'] = [];
+                }
+                if ($item == true) {
+                    $post_data['item'] = array_column($item, 'name');
+                } else {
+                    $post_data['item'] = [];
+                }
+                $post_data['prefecture'] = $prefecture;
+                $my_post['data'][] = $post_data;
+                ++$i;
+            }
+        }
+        $my_posts[] = $my_post;
+    }
+  }
+  add_action('rest_api_init', 'add_rest_endpoint_all_news');
